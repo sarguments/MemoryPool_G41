@@ -21,7 +21,7 @@ MemPool.Free(pData);
 struct st_TEST
 {
 	int _test1 = 1;
-	short _test2 = 2;
+	int _test2 = 2;
 };
 
 //template <class DATA>
@@ -31,10 +31,12 @@ private:
 	/* **************************************************************** */
 	// 각 블럭 앞에 사용될 노드 구조체.
 	/* **************************************************************** */
+
+	// 구조체 sizeof 할 경우 패딩까지 같이 계산 됨. pragma pack 안해도 됨
 	struct st_BLOCK_NODE
 	{
-		BYTE _code = 0x89;
-		st_BLOCK_NODE* _nextBlock = nullptr;
+		__int64 _code = 0x2525252525252525;
+		st_TEST* _nextBlock = nullptr;
 	};
 
 public:
