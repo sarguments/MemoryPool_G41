@@ -24,7 +24,6 @@ private:
 	struct st_BLOCK_NODE
 	{
 		__int64 _code;
-		//st_TEST* _nextBlock = nullptr;
 		st_BLOCK_NODE* _nextNode;
 		DATA _block;
 	};
@@ -73,47 +72,22 @@ public:
 	int		GetUseCount(void) { return _useCount; }
 
 private:
-	// TODO : 초기화?
-	int _useCount = 0;
+	int _useCount;
 	int _allocCount;
-	//st_TEST* _topPtr;
-	st_BLOCK_NODE* _topPtr = nullptr;
+	st_BLOCK_NODE* _topPtr;
 	char* _poolBuf;
 	bool _isPlacement;
-	bool _isDynamic = false;
+	bool _isDynamic;
 };
 
 // 생성자. iBlockNum 이 0이면 동적(프리리스트)
 template <class DATA>
 CMemoryPool<DATA>::CMemoryPool(int iBlockNum, bool bPlacementNew)
-	: _allocCount(iBlockNum), _isPlacement(bPlacementNew)
+	: _useCount(0), _allocCount(iBlockNum), _topPtr(nullptr),
+	_poolBuf(nullptr), _isPlacement(bPlacementNew), _isDynamic(false)
 {
-	/*
-	// 초기 할당 버퍼 크기 = (노드 + 블럭) * 블럭갯수
-	_poolBuf = (char*)malloc((sizeof(st_BLOCK_NODE) + sizeof(st_TEST)) * _allocCount);
-	*/
-	/*
-	for (int i = 0; i < iBlockNum; i++)
-	{
-	// 노드생성자, 블럭 생성자
-	char* nowPtr = _poolBuf + i * (sizeof(st_BLOCK_NODE) + sizeof(st_TEST));
-	new (nowPtr) st_BLOCK_NODE;
-	new (nowPtr + sizeof(st_BLOCK_NODE)) st_TEST;
-
-	// _nextBlock
-	//*(char**)(nowPtr + sizeof(__int64)) = nowPtr + (sizeof(st_BLOCK_NODE) * 2 + sizeof(st_TEST));
-	st_BLOCK_NODE* localNodePtr = (st_BLOCK_NODE*)(nowPtr + sizeof(__int64));
-	st_TEST* nextBlockPtr = (st_TEST*)(nowPtr + (sizeof(st_BLOCK_NODE) * 2 + sizeof(st_TEST)));
-	localNodePtr->_nextBlock = nextBlockPtr;
-	}
-
-	// 실제 블럭 포인터
-	_topPtr = (st_TEST*)_poolBuf + sizeof(st_BLOCK_NODE);
-	*/
-
 	if (_allocCount == 0)
 	{
-		// TODO :  프리리스트
 		_isDynamic = true;
 		return;
 	}
@@ -159,7 +133,6 @@ CMemoryPool<DATA>::CMemoryPool(int iBlockNum, bool bPlacementNew)
 template <class DATA>
 CMemoryPool<DATA>::~CMemoryPool()
 {
-	// TODO : 블럭 delete는 상관 X?
 	free(_poolBuf);
 }
 
@@ -183,47 +156,6 @@ DATA * CMemoryPool<DATA>::Alloc(void)
 
 			return &newNode->_block;
 		}
-
-		// 널이 아닌 경우 프리리스트에 두개이상 있는지 확인
-		if (_topPtr->_nextNode == nullptr)
-		{
-			// TODO : 내가 할당 했던 건지 확인
-			if (_topPtr->_code != 0x2525252525252525)
-			{
-				int* errorPtr = nullptr;
-				*errorPtr = 999;
-				return nullptr;
-			}
-
-			DATA* toReturnPtr = &_topPtr->_block;
-			_topPtr = _topPtr->_nextNode;
-			++_useCount;
-
-			return toReturnPtr;
-		}
-
-		// 하나만 있는 경우
-		// TODO : 내가 할당 했던 건지 확인
-		if (_topPtr->_code != 0x2525252525252525)
-		{
-			int* errorPtr = nullptr;
-			*errorPtr = 999;
-			return nullptr;
-		}
-
-		DATA* toReturnPtr = &_topPtr->_block;
-		_topPtr = nullptr;
-		++_useCount;
-
-		return toReturnPtr;
-	}
-
-	// TODO : 코드 체크 하는게 맞나?
-	if (_topPtr->_code != 0x2525252525252525)
-	{
-		int* errorPtr = nullptr;
-		*errorPtr = 999;
-		return nullptr;
 	}
 
 	// 노드가 아닌 블럭 리턴
@@ -238,8 +170,8 @@ DATA * CMemoryPool<DATA>::Alloc(void)
 	// topPtr 다음 노드로
 	_topPtr = _topPtr->_nextNode;
 
-	// 풀 갯수 감소
-	--_useCount;
+	// 사용중인 사이즈 증가
+	++_useCount;
 
 	// 오브젝트 반환
 	return toReturnPtr;
@@ -257,28 +189,10 @@ bool CMemoryPool<DATA>::Free(DATA * pData)
 		return false;
 	}
 
-	// 프리리스트(동적모드) 확인
-	if (_isDynamic == true)
+	// placement new 옵션 true이면 Free할때도 명시적 소멸자 호출
+	if (_isPlacement == true)
 	{
-		// top이 널인지 아닌지
-		if (_topPtr == nullptr)
-		{
-			_topPtr = toFreeNode;
-
-			// TODO : 적용 여부?
-			_topPtr->_nextNode = nullptr;
-			--_useCount;
-
-			return true;
-		}
-
-		// 이미 하나 이상 있을 경우
-		st_BLOCK_NODE* oldTop = _topPtr;
-		_topPtr = toFreeNode;
-		_topPtr->_nextNode = oldTop;
-		--_useCount;
-
-		return true;
+		pData->~DATA();
 	}
 
 	// 새로 회수되는 노드의 next는 기존 topPtr
